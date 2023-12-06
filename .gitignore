@@ -4,3 +4,5 @@
 /*.dylib
 /*.dll
 .DS_Store
+/res/logo.*
+/bd
