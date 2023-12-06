@@ -1,8 +1,9 @@
 Minimal Friction is a collection of original DSP modules for VCV Rack 2.
 
 # kanon
-![Minimal Friction Kanon](res/screenshots/kanon.png)
-Kanon is a single-pitch input 4-voice oscillator, with 4 accurate waveforms and 4 pitch-voice assignment algorithms.
+<img src="res/screenshots/kanon.png" alt="Minimal Friction Kanon" height="500" width="auto">
+
+Kanon is a 4-voice voltage-controlled oscillator. It sports a single 1V/oct input, distributing new pitches to its 4 voices based on a selection of simple algorithms.
 
 ## Manual
 
