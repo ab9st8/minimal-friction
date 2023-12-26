@@ -1,5 +1,9 @@
+#include <utility>
+#include <vector>
 #include "plugin.hpp"
 #include "widgets.hpp"
+
+#define DELAY_MEMORY_SIZE 3
 
 struct Terminal : Module {
     enum ParamId {
@@ -56,6 +60,16 @@ struct Terminal : Module {
         LIGHTS_LEN
     };
 
+    struct Channel {
+        // pair for stereo signal
+        // TODO: make this to a std::pair<std::vector<float>, std::vector<float>> instead
+        std::vector<std::pair<float, float>> memory;
+        size_t write;
+    };
+    Channel channels[3];
+
+    dsp::BooleanTrigger kill_trigger;
+
     Terminal()
     {
         config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
@@ -65,23 +79,75 @@ struct Terminal : Module {
 
         for (uint8_t i = 0; i < 3; i++) {
             configParam(GAIN1_PARAM + i, 0.f, 1.f, 0.5f, string::f("Channel %d gain", i+1), "%", 0, 100);
-            configParam(DELAY1_PARAM + i, 0.f, 3.f, 1.5f, string::f("Channel %d delay", i+1), " s");
+            configParam(DELAY1_PARAM + i, 0.f, (float)DELAY_MEMORY_SIZE, 1.5f, string::f("Channel %d delay time", i+1), " s");
 
             configButton(KILL1_PARAM + i, string::f("Kill channel %d", i+1));
 
-            configInput(ARRIVAL1_L_INPUT + i*2, string::f("Channel %d stereo left/mono feedback input", i+1));
+            configInput(ARRIVAL1_L_INPUT + i*2, string::f("Channel %d stereo left feedback input", i+1));
             configInput(ARRIVAL1_R_INPUT + i*2, string::f("Channel %d stereo right feedback input", i+1));
             configInput(GAIN1_MOD_INPUT + i, string::f("Channel %d gain CV input", i+1));
             configInput(DELAY1_MOD_INPUT + i, string::f("Channel %d delay CV input", i+1));
 
-            configOutput(DEPARTURE1_L_OUTPUT + i*2, string::f("Channel %d stereo left / mono feedback output", i+1));
+            configOutput(DEPARTURE1_L_OUTPUT + i*2, string::f("Channel %d stereo left feedback output", i+1));
             configOutput(DEPARTURE1_R_OUTPUT + i*2, string::f("Channel %d stereo right feedback output", i+1));
+
+            channels[i].write = 0;
+            channels[i].memory = std::vector<std::pair<float, float>>((size_t)(DELAY_MEMORY_SIZE * APP->engine->getSampleRate()), { 0.f, 0.f });
         }
     }
 
     void process(const ProcessArgs& args) override
     {
+    // TODO: Is this modulation calculation correct?
+    #define DELAY_TIME clamp(params[DELAY1_PARAM + i].getValue() + (inputs[DELAY1_MOD_INPUT + i].getVoltage()) * 3.f/10.f, 0.f, DELAY_MEMORY_SIZE*args.sampleRate)
+    #define GAIN       clamp(params[GAIN1_PARAM + i].getValue() + (inputs[GAIN1_MOD_INPUT + i].getVoltage()) / 10.f, 0.f, 1.f)
+        
 
+        // We implement the singly-tapped delay line with a ring buffer,
+        // whose size is set specifically to the number of samples in 3
+        // seconds of audio, i.e. the maximum delay time.
+        // TODO: implement behavior on sample rate changes
+        // We can view the delay "memory" in two ways:
+        //
+        // 1. A static, (<max delay time> * <samplerate> Hz)-size container where each new sample,
+        //    the contents of the entire array move to make space for the new value.
+        //    In that model, the delay tap, dependent on delay time, is static in one place.
+        // 2. (How it actually works) A (3 seconds * <samplerate> Hz)-size ring buffer where each frame,
+        //    if the container is full, the oldest element is overwritten with the value of the new sample
+        //    and our tap pointer is moved one element forward and also moved accordingly to the delay time
+        //    changes.
+        // The kill switches not only clear the departure output but also the delay memory!
+
+        for (int i = 0; i < 3; i++) {
+            Channel& chan = channels[i];
+            size_t size = chan.memory.size();
+            chan.memory[chan.write] = { inputs[ARRIVAL1_L_INPUT + i*2].getVoltage(), inputs[ARRIVAL1_R_INPUT + i*2].getVoltage() };
+            
+            // how far back in the ring buffer we have to go to reach the appropriate delayed sample
+            size_t setback = (size_t)roundf(args.sampleRate * DELAY_TIME);
+
+            size_t delay_location = (chan.write - setback + size) % size;
+            std::pair<float, float> delay = chan.memory[delay_location];
+
+            outputs[DEPARTURE1_L_OUTPUT + i*2].setVoltage(inputs[INPUT_L_INPUT].getVoltage() + delay.first*GAIN);
+            outputs[DEPARTURE1_R_OUTPUT + i*2].setVoltage(inputs[INPUT_R_INPUT].getVoltage() + delay.second*GAIN);
+
+            chan.write++;
+            chan.write %= size;
+
+            // TODO: this should be more performant. As it is, holding down the button makes
+            // TODO: unpleasant distorted noises.
+            if (kill_trigger.process(params[KILL1_PARAM + i].getValue())) {
+                outputs[DEPARTURE1_L_OUTPUT + i*2].setVoltage(0.f);
+                outputs[DEPARTURE1_R_OUTPUT + i*2].setVoltage(0.f);
+                std::fill(chan.memory.begin(), chan.memory.end(), std::make_pair(0.f, 0.f));
+                chan.write = 0;
+            }
+
+        }
+
+    #undef GAIN
+    #undef DELAY_TIME
     }
 };
 
