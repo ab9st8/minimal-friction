@@ -62,11 +62,11 @@ struct Terminal : Module {
 
     struct Channel {
         // pair for stereo signal
-        // TODO: make this to a std::pair<std::vector<float>, std::vector<float>> instead
-        std::vector<std::pair<float, float>> memory;
+        std::pair<std::vector<float>, std::vector<float>> memory;
         size_t write;
     };
     Channel channels[3];
+    size_t memory_size;
 
     dsp::BooleanTrigger kill_trigger;
 
@@ -92,7 +92,8 @@ struct Terminal : Module {
             configOutput(DEPARTURE1_R_OUTPUT + i*2, string::f("Channel %d stereo right feedback output", i+1));
 
             channels[i].write = 0;
-            channels[i].memory = std::vector<std::pair<float, float>>((size_t)(DELAY_MEMORY_SIZE * APP->engine->getSampleRate()), { 0.f, 0.f });
+            memory_size = DELAY_MEMORY_SIZE * APP->engine->getSampleRate();
+            channels[i].memory = { std::vector<float>(memory_size, 0.f), std::vector<float>(memory_size, 0.f) };
         }
     }
 
@@ -120,27 +121,28 @@ struct Terminal : Module {
 
         for (int i = 0; i < 3; i++) {
             Channel& chan = channels[i];
-            size_t size = chan.memory.size();
-            chan.memory[chan.write] = { inputs[ARRIVAL1_L_INPUT + i*2].getVoltage(), inputs[ARRIVAL1_R_INPUT + i*2].getVoltage() };
+            chan.memory.first[chan.write]  = inputs[ARRIVAL1_L_INPUT + i*2].getVoltage();
+            chan.memory.second[chan.write] = inputs[ARRIVAL1_R_INPUT + i*2].getVoltage();
             
             // how far back in the ring buffer we have to go to reach the appropriate delayed sample
             size_t setback = (size_t)roundf(args.sampleRate * DELAY_TIME);
 
-            size_t delay_location = (chan.write - setback + size) % size;
-            std::pair<float, float> delay = chan.memory[delay_location];
+            size_t delay_location = (chan.write - setback + memory_size) % memory_size;
 
-            outputs[DEPARTURE1_L_OUTPUT + i*2].setVoltage(inputs[INPUT_L_INPUT].getVoltage() + delay.first*GAIN);
-            outputs[DEPARTURE1_R_OUTPUT + i*2].setVoltage(inputs[INPUT_R_INPUT].getVoltage() + delay.second*GAIN);
+            outputs[DEPARTURE1_L_OUTPUT + i*2].setVoltage(inputs[INPUT_L_INPUT].getVoltage() + chan.memory.first[delay_location] * GAIN);
+            outputs[DEPARTURE1_R_OUTPUT + i*2].setVoltage(inputs[INPUT_R_INPUT].getVoltage() + chan.memory.second[delay_location] * GAIN);
 
             chan.write++;
-            chan.write %= size;
+            chan.write %= memory_size;
 
             // TODO: this should be more performant. As it is, holding down the button makes
             // TODO: unpleasant distorted noises.
             if (kill_trigger.process(params[KILL1_PARAM + i].getValue())) {
                 outputs[DEPARTURE1_L_OUTPUT + i*2].setVoltage(0.f);
                 outputs[DEPARTURE1_R_OUTPUT + i*2].setVoltage(0.f);
-                std::fill(chan.memory.begin(), chan.memory.end(), std::make_pair(0.f, 0.f));
+                // TODO: ensure is this correct
+                std::memset(static_cast<void*>(chan.memory.first.data()), 0, sizeof(float) * memory_size);
+                std::memset(static_cast<void*>(chan.memory.second.data()), 0, sizeof(float) * memory_size);
                 chan.write = 0;
             }
 
