@@ -21,6 +21,15 @@
         "Polyphonic",
         "Oscillator"
       ]
-    }
+    },
+    {
+        "slug": "terminal",
+        "name": "Terminal",
+        "description": "Feedback loop mixer",
+        "tags": [
+          "Mixer",
+          "Effect"
+        ]
+      }
   ]
 }
