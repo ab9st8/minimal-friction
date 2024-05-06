@@ -285,6 +285,22 @@ struct Kanon : Module {
     {
         setMode(random::u32() % 4);
         setWaveshape(random::u32() % 4);
+        // vvvvvvvvvvvvvv
+        order = RIGHT;
+        master_voice = 0;
+        // ^^^^^^^^^^^^^^ not sure if reduntant or not
+    }
+
+    void onReset() override
+    {
+        setMode(KANON);
+        setWaveshape(SINE);
+        params[COARSE_PARAM].setValue(0.f);
+        params[FINE_PARAM].setValue(0.f);
+
+        order = RIGHT;
+        master_voice = 0;
+        last_voct = 0.f;
     }
 };
 
