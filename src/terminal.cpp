@@ -136,11 +136,14 @@ struct Terminal : Module {
             chan.write %= memory_size;
 
             // TODO: this should be more performant. As it is, holding down the button makes
-            // TODO: unpleasant distorted noises.
+            // TODO: unpleasant distorted noises (which don't make it recordings made with the
+            // TODO: VCV recorder module, but are nonetheless broadcasted through the audio module).
+            // TODO: This should be fixed with an amplitude fade-out over several frames; look
+            // TODO: into how that works.
             if (kill_trigger.process(params[KILL1_PARAM + i].getValue())) {
                 outputs[DEPARTURE1_L_OUTPUT + i*2].setVoltage(0.f);
                 outputs[DEPARTURE1_R_OUTPUT + i*2].setVoltage(0.f);
-                // TODO: ensure is this correct
+
                 std::memset(static_cast<void*>(chan.memory.first.data()), 0, sizeof(float) * memory_size);
                 std::memset(static_cast<void*>(chan.memory.second.data()), 0, sizeof(float) * memory_size);
                 chan.write = 0;
