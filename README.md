@@ -1,7 +1,7 @@
 Minimal Friction is a collection of original DSP modules for VCV Rack 2.
 
 # kanon
-<img src="res/screenshots/kanon.png" alt="Minimal Friction Kanon" max-height="100%" max-width="100%" height="auto" width="auto">
+<img src="res/screenshots/kanon.png" alt="Minimal Friction Kanon" width="300px" height="auto">
 
 > *As seen and heard in [Vav Vavrek's jam](https://youtu.be/AP9SAKSaIHs)*
 
@@ -33,7 +33,7 @@ Feel free to experiment with:
 
 
 # terminal
-<img src="res/screenshots/terminal.png" alt="Minimal Friction Terminal" max-height="100%" max-width="100%" height="auto" width="auto">
+<img src="res/screenshots/terminal.png" alt="Minimal Friction Terminal" width="300px" height="auto">
 
 Terminal is a feedback loop utility module.
 
